@@ -5,11 +5,11 @@
 [![Build Status](https://github.com/modelingevolution/bytes/actions/workflows/ci.yml/badge.svg)](https://github.com/modelingevolution/bytes/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-A high-performance, readonly struct for representing byte sizes with human-readable formatting, arithmetic operations, and full serialization support including dictionary key compatibility.
+A high-performance struct for representing byte sizes with human-readable formatting, arithmetic operations, and full serialization support including dictionary key compatibility.
 
 ## Features
 
-- **Readonly struct** - Immutable, thread-safe, and efficient
+- **Value type struct** - Stack allocated, efficient, and thread-safe
 - **Human-readable formatting** - Automatically formats as "1.5 KB", "2.3 MB", etc.
 - **Full arithmetic support** - Addition, subtraction, multiplication, division
 - **Implicit conversions** - Seamlessly convert between numeric types and Bytes
@@ -114,31 +114,13 @@ public class Document
 var serializer = new DataContractSerializer(typeof(Document));
 ```
 
-## Protobuf Serialization Support
+## Protobuf Serialization
 
-The readonly `Bytes` struct can work with Protobuf-net using either the surrogate pattern or wrapper properties.
+Full support for Protobuf-net serialization - works directly with no configuration needed:
 
-### Option 1: Surrogate Pattern (Recommended)
 ```csharp
-// 1. Define a surrogate struct
-[ProtoContract]
-public struct BytesSurrogate
-{
-    [ProtoMember(1)]
-    public long Value { get; set; }
-    
-    public static implicit operator BytesSurrogate(Bytes bytes)
-        => new BytesSurrogate { Value = bytes.Value };
-    
-    public static implicit operator Bytes(BytesSurrogate surrogate)
-        => new Bytes(surrogate.Value);
-}
+using ProtoBuf;
 
-// 2. Configure at app startup
-RuntimeTypeModel.Default.Add(typeof(Bytes), false)
-    .SetSurrogate(typeof(BytesSurrogate));
-
-// 3. Now you can use Bytes directly in your models
 [ProtoContract]
 public class FileInfo
 {
@@ -146,29 +128,16 @@ public class FileInfo
     public string Name { get; set; }
     
     [ProtoMember(2)]
-    public Bytes Size { get; set; }  // Works seamlessly!
+    public Bytes Size { get; set; }  // Works directly!
 }
+
+// Serialize with Protobuf
+var file = new FileInfo { Name = "video.mp4", Size = "1.5GB" };
+using var stream = new MemoryStream();
+Serializer.Serialize(stream, file);
 ```
 
-### Option 2: Wrapper Properties
-```csharp
-[ProtoContract]
-public class FileInfo
-{
-    [ProtoMember(1)]
-    public string Name { get; set; }
-    
-    [ProtoMember(2)]
-    public long SizeValue { get; set; }
-    
-    [ProtoIgnore]
-    public Bytes Size 
-    { 
-        get => new Bytes(SizeValue);
-        set => SizeValue = value.Value;
-    }
-}
-```
+The `Bytes` struct uses `[DataContract]` attributes which Protobuf-net recognizes, enabling seamless serialization.
 
 ## Parsing Formats
 

@@ -5,12 +5,12 @@ using System.Text.Json.Serialization;
 namespace ModelingEvolution;
 
 /// <summary>
-/// A readonly struct representing a size in bytes with support for human-readable formatting,
+/// A struct representing a size in bytes with support for human-readable formatting,
 /// arithmetic operations, and full serialization including use as dictionary keys.
 /// </summary>
 [DataContract]
 [JsonConverter(typeof(BytesJsonConverter))]
-public readonly struct Bytes : IComparable<Bytes>, IEquatable<Bytes>, IParsable<Bytes>, IComparable
+public struct Bytes : IComparable<Bytes>, IEquatable<Bytes>, IParsable<Bytes>, IComparable
 {
     /// <summary>
     /// Represents zero bytes.
@@ -18,8 +18,8 @@ public readonly struct Bytes : IComparable<Bytes>, IEquatable<Bytes>, IParsable<
     public static readonly Bytes Zero = new(0);
 
     [DataMember(Order = 1)]
-    private readonly long _value;
-    private readonly sbyte _precision;
+    private long _value;
+    private sbyte _precision;
 
     /// <summary>
     /// Initializes a new instance of Bytes with the specified value and precision.

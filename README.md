@@ -1,5 +1,10 @@
 # ModelingEvolution.Bytes
 
+[![NuGet](https://img.shields.io/nuget/v/ModelingEvolution.Bytes.svg)](https://www.nuget.org/packages/ModelingEvolution.Bytes/)
+[![NuGet Downloads](https://img.shields.io/nuget/dt/ModelingEvolution.Bytes.svg)](https://www.nuget.org/packages/ModelingEvolution.Bytes/)
+[![Build Status](https://github.com/modelingevolution/bytes/actions/workflows/ci.yml/badge.svg)](https://github.com/modelingevolution/bytes/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 A high-performance, readonly struct for representing byte sizes with human-readable formatting, arithmetic operations, and full serialization support including dictionary key compatibility.
 
 ## Features

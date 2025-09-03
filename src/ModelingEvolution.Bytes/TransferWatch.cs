@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.Serialization;
+using System.Text.Json.Serialization;
 
 namespace ModelingEvolution;
 
@@ -232,49 +233,50 @@ public class TransferWatch
 /// Immutable statistics about a transfer operation.
 /// </summary>
 [DataContract]
-public readonly struct TransferStatistics : IEquatable<TransferStatistics>
+[JsonConverter(typeof(TransferStatisticsJsonConverter))]
+public struct TransferStatistics : IEquatable<TransferStatistics>
 {
     /// <summary>
     /// Total bytes transferred.
     /// </summary>
     [DataMember(Order = 1)]
-    public Bytes TotalBytes { get; }
+    public Bytes TotalBytes { get; private set; }
 
     /// <summary>
     /// Total elapsed time.
     /// </summary>
     [DataMember(Order = 2)]
-    public TimeSpan ElapsedTime { get; }
+    public TimeSpan ElapsedTime { get; private set; }
 
     /// <summary>
     /// Current transfer rate.
     /// </summary>
     [DataMember(Order = 3)]
-    public BytesPerSecond CurrentRate { get; }
+    public BytesPerSecond CurrentRate { get; private set; }
 
     /// <summary>
     /// Average transfer rate.
     /// </summary>
     [DataMember(Order = 4)]
-    public BytesPerSecond AverageRate { get; }
+    public BytesPerSecond AverageRate { get; private set; }
 
     /// <summary>
     /// Peak transfer rate.
     /// </summary>
     [DataMember(Order = 5)]
-    public BytesPerSecond PeakRate { get; }
+    public BytesPerSecond PeakRate { get; private set; }
 
     /// <summary>
     /// Instantaneous transfer rate.
     /// </summary>
     [DataMember(Order = 6)]
-    public BytesPerSecond InstantaneousRate { get; }
+    public BytesPerSecond InstantaneousRate { get; private set; }
 
     /// <summary>
     /// Number of samples collected.
     /// </summary>
     [DataMember(Order = 7)]
-    public int SampleCount { get; }
+    public int SampleCount { get; private set; }
 
     public TransferStatistics(
         Bytes totalBytes,

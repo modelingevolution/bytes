@@ -1,0 +1,22 @@
+<Project>
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    
+    <!-- Package properties -->
+    <Authors>ModelingEvolution Team</Authors>
+    <Company>ModelingEvolution</Company>
+    <Product>ModelingEvolution.Bytes</Product>
+    <Copyright>Copyright © 2025 ModelingEvolution</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/modelingevolution/bytes</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/modelingevolution/bytes</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>bytes;size;filesize;datacontract;serialization;value-type</PackageTags>
+    <Description>A readonly struct for representing byte sizes with human-readable formatting, arithmetic operations, and full serialization support including dictionary key compatibility.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+</Project>

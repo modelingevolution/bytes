@@ -14,10 +14,7 @@ env:
 
 jobs:
   build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ubuntu-latest
     
     steps:
     - uses: actions/checkout@v4
@@ -39,7 +36,6 @@ jobs:
       run: dotnet test --no-build --configuration Release --verbosity normal --logger "console;verbosity=detailed" --collect:"XPlat Code Coverage"
     
     - name: Upload coverage to Codecov
-      if: matrix.os == 'ubuntu-latest'
       uses: codecov/codecov-action@v4
       with:
         file: '**/coverage.cobertura.xml'
@@ -63,12 +59,18 @@ jobs:
     - name: Get version
       id: version
       run: |
-        VERSION=$(date +%Y.%m.%d)-preview.${{ github.run_number }}
+        BRANCH_NAME=${GITHUB_REF#refs/heads/}
+        VERSION=1.0.0-${BRANCH_NAME}-${GITHUB_SHA::7}
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         echo "Version: $VERSION"
     
-    - name: Pack
-      run: dotnet pack --configuration Release /p:Version=${{ steps.version.outputs.VERSION }} --output ${{ env.NUGET_DIRECTORY }}
+    - name: Restore dependencies
+      run: dotnet restore
+    
+    - name: Build and Pack
+      run: |
+        dotnet build --configuration Release --no-restore
+        dotnet pack --configuration Release --no-build /p:Version=${{ steps.version.outputs.VERSION }} --output ${{ env.NUGET_DIRECTORY }}
     
     - name: Upload artifacts
       uses: actions/upload-artifact@v4

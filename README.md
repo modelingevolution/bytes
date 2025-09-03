@@ -114,6 +114,62 @@ public class Document
 var serializer = new DataContractSerializer(typeof(Document));
 ```
 
+## Protobuf Serialization Support
+
+The readonly `Bytes` struct can work with Protobuf-net using either the surrogate pattern or wrapper properties.
+
+### Option 1: Surrogate Pattern (Recommended)
+```csharp
+// 1. Define a surrogate struct
+[ProtoContract]
+public struct BytesSurrogate
+{
+    [ProtoMember(1)]
+    public long Value { get; set; }
+    
+    public static implicit operator BytesSurrogate(Bytes bytes)
+        => new BytesSurrogate { Value = bytes.Value };
+    
+    public static implicit operator Bytes(BytesSurrogate surrogate)
+        => new Bytes(surrogate.Value);
+}
+
+// 2. Configure at app startup
+RuntimeTypeModel.Default.Add(typeof(Bytes), false)
+    .SetSurrogate(typeof(BytesSurrogate));
+
+// 3. Now you can use Bytes directly in your models
+[ProtoContract]
+public class FileInfo
+{
+    [ProtoMember(1)]
+    public string Name { get; set; }
+    
+    [ProtoMember(2)]
+    public Bytes Size { get; set; }  // Works seamlessly!
+}
+```
+
+### Option 2: Wrapper Properties
+```csharp
+[ProtoContract]
+public class FileInfo
+{
+    [ProtoMember(1)]
+    public string Name { get; set; }
+    
+    [ProtoMember(2)]
+    public long SizeValue { get; set; }
+    
+    [ProtoIgnore]
+    public Bytes Size 
+    { 
+        get => new Bytes(SizeValue);
+        set => SizeValue = value.Value;
+    }
+}
+```
+
 ## Parsing Formats
 
 The parser supports various formats with case-insensitive suffixes:

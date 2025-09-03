@@ -5,29 +5,25 @@ using System.Text.Json.Serialization;
 namespace ModelingEvolution;
 
 /// <summary>
-/// A class that measures data transfer rates using time-bucketed sampling.
+/// A class that measures data transfer rates using time-bucketed sampling without allocations.
 /// </summary>
 public class TransferWatch
 {
-    private class Bucket
-    {
-        public DateTime StartTime { get; set; }
-        public Bytes BytesTransferred { get; set; }
-        
-        public Bucket(DateTime startTime)
-        {
-            StartTime = startTime;
-            BytesTransferred = Bytes.Zero;
-        }
-    }
-    
     private readonly double _bucketIntervalSeconds;
-    private readonly LinkedList<Bucket> _buckets = new();
-    private Bucket? _currentBucket;
+    private readonly BytesPerSecond[] _rates;
     private readonly int _maxBuckets;
+    private int _currentIndex;
+    private int _filledBuckets;
+    
+    private Bytes _currentIntervalBytes = Bytes.Zero;
     private Bytes _totalBytes = Bytes.Zero;
+    private BytesPerSecond _currentRate = BytesPerSecond.Zero;
+    private BytesPerSecond _peakRate = BytesPerSecond.Zero;
+    
     private readonly Stopwatch _stopwatch = new();
-    private DateTime _startTime;
+    private double _lastIntervalTime;
+    private readonly DateTime _startTime;
+    private readonly object _lock = new();
 
     /// <summary>
     /// Initializes a new instance of TransferWatch.
@@ -43,8 +39,12 @@ public class TransferWatch
             
         _bucketIntervalSeconds = bucketIntervalSeconds;
         _maxBuckets = maxBuckets;
+        _rates = new BytesPerSecond[maxBuckets]; // Allocated once
         _startTime = DateTime.UtcNow;
         _stopwatch.Start();
+        _lastIntervalTime = 0;
+        _currentIndex = 0;
+        _filledBuckets = 0;
     }
 
     /// <summary>
@@ -53,25 +53,9 @@ public class TransferWatch
     public Bytes TotalBytes => _totalBytes;
 
     /// <summary>
-    /// Gets the current transfer rate based on the most recent complete bucket.
+    /// Gets the current transfer rate based on the most recent complete interval.
     /// </summary>
-    public BytesPerSecond CurrentRate
-    {
-        get
-        {
-            lock (_buckets)
-            {
-                if (_buckets.Count == 0)
-                    return BytesPerSecond.Zero;
-                    
-                var lastCompleteBucket = _buckets.Last?.Value;
-                if (lastCompleteBucket == null)
-                    return BytesPerSecond.Zero;
-                    
-                return BytesPerSecond.FromBytesAndTime(lastCompleteBucket.BytesTransferred, _bucketIntervalSeconds);
-            }
-        }
-    }
+    public BytesPerSecond CurrentRate => _currentRate;
 
     /// <summary>
     /// Gets the average transfer rate since the watch started.
@@ -91,39 +75,20 @@ public class TransferWatch
     /// <summary>
     /// Gets the peak transfer rate from all buckets.
     /// </summary>
-    public BytesPerSecond PeakRate
-    {
-        get
-        {
-            lock (_buckets)
-            {
-                if (_buckets.Count == 0)
-                    return BytesPerSecond.Zero;
-                    
-                var maxBytes = _buckets.Max(b => b.BytesTransferred.Value);
-                return BytesPerSecond.FromBytesAndTime(new Bytes(maxBytes), _bucketIntervalSeconds);
-            }
-        }
-    }
+    public BytesPerSecond PeakRate => _peakRate;
 
     /// <summary>
-    /// Gets the instantaneous rate (current bucket in progress).
+    /// Gets the instantaneous rate (current interval in progress).
     /// </summary>
     public BytesPerSecond InstantaneousRate
     {
         get
         {
-            lock (_buckets)
-            {
-                if (_currentBucket == null)
-                    return BytesPerSecond.Zero;
-                    
-                var elapsed = (DateTime.UtcNow - _currentBucket.StartTime).TotalSeconds;
-                if (elapsed <= 0)
-                    return BytesPerSecond.Zero;
-                    
-                return BytesPerSecond.FromBytesAndTime(_currentBucket.BytesTransferred, elapsed);
-            }
+            var elapsed = _stopwatch.Elapsed.TotalSeconds - _lastIntervalTime;
+            if (elapsed <= 0)
+                return BytesPerSecond.Zero;
+                
+            return BytesPerSecond.FromBytesAndTime(_currentIntervalBytes, elapsed);
         }
     }
 
@@ -138,16 +103,40 @@ public class TransferWatch
     /// <param name="bytes">The bytes transferred.</param>
     public void Add(Bytes bytes)
     {
-        lock (_buckets)
+        lock (_lock)
         {
-            var now = DateTime.UtcNow;
-            UpdateBucket(now);
+            var currentTime = _stopwatch.Elapsed.TotalSeconds;
             
-            if (_currentBucket != null)
+            // Check if we need to move to the next interval
+            if (currentTime - _lastIntervalTime >= _bucketIntervalSeconds)
             {
-                _currentBucket.BytesTransferred += bytes;
+                // Calculate rate for the completed interval
+                if (_lastIntervalTime > 0 || _currentIntervalBytes.Value > 0)
+                {
+                    var intervalDuration = currentTime - _lastIntervalTime;
+                    if (intervalDuration > 0)
+                    {
+                        _currentRate = BytesPerSecond.FromBytesAndTime(_currentIntervalBytes, intervalDuration);
+                        
+                        // Store in circular buffer
+                        _rates[_currentIndex] = _currentRate;
+                        _currentIndex = (_currentIndex + 1) % _maxBuckets;
+                        if (_filledBuckets < _maxBuckets)
+                            _filledBuckets++;
+                        
+                        // Update peak rate
+                        if (_currentRate > _peakRate)
+                            _peakRate = _currentRate;
+                    }
+                }
+                
+                // Reset for new interval
+                _currentIntervalBytes = Bytes.Zero;
+                _lastIntervalTime = currentTime;
             }
             
+            // Add bytes to current interval and total
+            _currentIntervalBytes += bytes;
             _totalBytes += bytes;
         }
     }
@@ -157,13 +146,22 @@ public class TransferWatch
     /// </summary>
     public void Reset()
     {
-        lock (_buckets)
+        lock (_lock)
         {
-            _buckets.Clear();
-            _currentBucket = null;
+            _currentIntervalBytes = Bytes.Zero;
             _totalBytes = Bytes.Zero;
-            _startTime = DateTime.UtcNow;
+            _currentRate = BytesPerSecond.Zero;
+            _peakRate = BytesPerSecond.Zero;
             _stopwatch.Restart();
+            _lastIntervalTime = 0;
+            _currentIndex = 0;
+            _filledBuckets = 0;
+            
+            // Clear the rates array
+            for (int i = 0; i < _maxBuckets; i++)
+            {
+                _rates[i] = BytesPerSecond.Zero;
+            }
         }
     }
 
@@ -173,13 +171,20 @@ public class TransferWatch
     /// <returns>An array of recent transfer rates, newest first.</returns>
     public BytesPerSecond[] GetRecentRates()
     {
-        lock (_buckets)
+        var result = new BytesPerSecond[_filledBuckets];
+        
+        if (_filledBuckets == 0)
+            return result;
+        
+        // Copy rates in reverse order (newest first)
+        var startIdx = (_currentIndex - 1 + _maxBuckets) % _maxBuckets;
+        for (int i = 0; i < _filledBuckets; i++)
         {
-            return _buckets
-                .Reverse()
-                .Select(b => BytesPerSecond.FromBytesAndTime(b.BytesTransferred, _bucketIntervalSeconds))
-                .ToArray();
+            var idx = (startIdx - i + _maxBuckets) % _maxBuckets;
+            result[i] = _rates[idx];
         }
+        
+        return result;
     }
 
     /// <summary>
@@ -187,45 +192,15 @@ public class TransferWatch
     /// </summary>
     public TransferStatistics GetStatistics()
     {
-        lock (_buckets)
-        {
-            return new TransferStatistics(
-                totalBytes: _totalBytes,
-                elapsedTime: _stopwatch.Elapsed,
-                currentRate: CurrentRate,
-                averageRate: AverageRate,
-                peakRate: PeakRate,
-                instantaneousRate: InstantaneousRate,
-                sampleCount: _buckets.Count
-            );
-        }
-    }
-
-    private void UpdateBucket(DateTime now)
-    {
-        // If no current bucket, create one
-        if (_currentBucket == null)
-        {
-            _currentBucket = new Bucket(now);
-            return;
-        }
-
-        // Check if we need to move to a new bucket
-        var bucketAge = (now - _currentBucket.StartTime).TotalSeconds;
-        if (bucketAge >= _bucketIntervalSeconds)
-        {
-            // Save current bucket to history
-            _buckets.AddLast(_currentBucket);
-            
-            // Remove old buckets if we exceed max
-            while (_buckets.Count > _maxBuckets)
-            {
-                _buckets.RemoveFirst();
-            }
-            
-            // Create new current bucket
-            _currentBucket = new Bucket(now);
-        }
+        return new TransferStatistics(
+            totalBytes: _totalBytes,
+            elapsedTime: _stopwatch.Elapsed,
+            currentRate: _currentRate,
+            averageRate: AverageRate,
+            peakRate: _peakRate,
+            instantaneousRate: InstantaneousRate,
+            sampleCount: _filledBuckets
+        );
     }
 }
 

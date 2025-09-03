@@ -47,7 +47,7 @@ var divided = size2 / 2;               // 768 bytes
 
 // Display formatting
 Console.WriteLine(size2);              // "1.5 KB"
-Console.WriteLine(size2.Value);        // 1536 (raw bytes)
+long rawBytes = size2;                 // 1536 (implicit conversion)
 
 // Comparisons
 if (size1 < size2)
@@ -226,7 +226,7 @@ public class DownloadProgress
     public Bytes Total { get; private set; }
     
     public double PercentComplete => 
-        Total.Value > 0 ? (double)Downloaded / Total * 100 : 0;
+        (long)Total > 0 ? (double)Downloaded / Total * 100 : 0;
     
     public void Update(Bytes bytesReceived)
     {

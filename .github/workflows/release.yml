@@ -77,6 +77,14 @@ jobs:
             --skip-duplicate
         done
     
+    - name: Publish to ModelingEvolution NuGet
+      run: |
+        dotnet nuget push "${{ env.NUGET_DIRECTORY }}/*.nupkg" \
+          --api-key ${{ secrets.NUGET_API_KEY_ME }} \
+          --source https://nuget.modelingevolution.com/v3/index.json \
+          --skip-duplicate
+      continue-on-error: true
+
     - name: Publish to GitHub Packages
       run: |
         for file in ${{ env.NUGET_DIRECTORY }}/*.nupkg
